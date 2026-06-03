@@ -1,0 +1,32 @@
+[package]
+name = "cargo-artifacts"
+description = "List and copy artifacts from a `cargo build` run"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.94"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/sagikazarmark/cargo-artifacts"
+homepage = "https://github.com/sagikazarmark/cargo-artifacts"
+
+[dependencies]
+anyhow = "1.0"
+cargo_metadata = "0.22"
+clap = { version = "4.5", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+tempfile = "3.23"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
+[package.metadata.release]
+sign-commit = true
+sign-tag = true
+shared-version = true
+tag-message = "Release {{version}}"
+tag-name = "v{{version}}"
