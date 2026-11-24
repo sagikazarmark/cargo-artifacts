@@ -1,12 +1,11 @@
 [package]
 name = "cargo-artifacts"
-description = "List and copy artifacts from a `cargo build` run"
 version = "0.3.0"
+description = "List and copy artifacts from a `cargo build` run"
 edition = "2024"
 rust-version = "1.94"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/sagikazarmark/cargo-artifacts"
-homepage = "https://github.com/sagikazarmark/cargo-artifacts"
 
 [dependencies]
 anyhow = "1.0"
