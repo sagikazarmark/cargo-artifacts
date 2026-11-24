@@ -56,13 +56,6 @@ pub fn is_final_artifact_path(path: &str) -> bool {
         return false;
     }
 
-    if components
-        .iter()
-        .any(|component| is_internal_dir(component))
-    {
-        return false;
-    }
-
     let Some(file_name) = components.last() else {
         return false;
     };
@@ -71,14 +64,18 @@ pub fn is_final_artifact_path(path: &str) -> bool {
     }
 
     let file_index = components.len() - 1;
-    if file_index >= 2
-        && components[file_index - 1] == "examples"
-        && is_public_profile_output_dir(&components, file_index - 2)
-    {
-        return true;
-    }
+    let target_index = (file_index >= 2 && components[file_index - 1] == "examples")
+        .then(|| public_profile_output_target(&components, file_index - 2))
+        .flatten()
+        .or_else(|| public_profile_output_target(&components, file_index - 1));
 
-    is_public_profile_output_dir(&components, file_index - 1)
+    // Only the target directory's own layout decides: the directories above it (a checkout under
+    // `build/`, Nix's `/build` sandbox) are not Cargo's.
+    target_index.is_some_and(|target_index| {
+        !components[target_index + 1..file_index]
+            .iter()
+            .any(|component| is_internal_dir(component))
+    })
 }
 
 fn split_path_components(path: &str) -> Vec<&str> {
@@ -87,21 +84,22 @@ fn split_path_components(path: &str) -> Vec<&str> {
         .collect()
 }
 
-fn is_public_profile_output_dir(components: &[&str], profile_index: usize) -> bool {
-    let Some(profile) = components.get(profile_index) else {
-        return false;
-    };
+/// The index of the `target` directory when `profile_index` is a public profile output directory
+/// (`target/<profile>` or `target/<compilation target>/<profile>`).
+fn public_profile_output_target(components: &[&str], profile_index: usize) -> Option<usize> {
+    let profile = components.get(profile_index)?;
     if !is_plausible_profile_dir(profile) {
-        return false;
+        return None;
     }
 
     if profile_index >= 1 && components[profile_index - 1] == "target" {
-        return true;
+        return Some(profile_index - 1);
     }
 
-    profile_index >= 2
+    (profile_index >= 2
         && components[profile_index - 2] == "target"
-        && is_plausible_compilation_target_dir(components[profile_index - 1])
+        && is_plausible_compilation_target_dir(components[profile_index - 1]))
+    .then(|| profile_index - 2)
 }
 
 fn is_plausible_profile_dir(component: &str) -> bool {
@@ -187,6 +185,34 @@ mod tests {
                 "/workspace/target/debug/build/app/build-script-build",
                 "/workspace/target/debug/.fingerprint/app/lib-app.json",
                 "/workspace/target/debug/incremental/app/s-cache",
+            ]),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn includes_paths_whose_ancestors_are_named_like_internal_dirs() {
+        // Nix's Linux sandbox builds in /build; a checkout can sit anywhere.
+        assert_eq!(
+            selected(&[
+                "/build/source/target/debug/app",
+                "/home/me/deps/app/target/x86_64-unknown-linux-gnu/release/app",
+                "/srv/incremental/.fingerprint/target/debug/examples/demo",
+            ]),
+            vec![
+                "/build/source/target/debug/app",
+                "/home/me/deps/app/target/x86_64-unknown-linux-gnu/release/app",
+                "/srv/incremental/.fingerprint/target/debug/examples/demo",
+            ]
+        );
+    }
+
+    #[test]
+    fn excludes_internal_paths_under_an_ancestor_named_build() {
+        assert_eq!(
+            selected(&[
+                "/build/source/target/debug/deps/libdep.rlib",
+                "/build/source/target/debug/build/app/build-script-build",
             ]),
             Vec::<String>::new()
         );
